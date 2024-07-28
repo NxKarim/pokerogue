@@ -7,7 +7,7 @@ import { StatusEffect } from "./status-effect";
 import * as Utils from "../utils";
 import { ChargeAttr, MoveFlags, allMoves } from "./move";
 import { Type } from "./type";
-import { BlockNonDirectDamageAbAttr, FlinchEffectAbAttr, ReverseDrainAbAttr, applyAbAttrs } from "./ability";
+import { BlockNonDirectDamageAbAttr, DisguiseConfusionInteractionAbAttr, FlinchEffectAbAttr, ReverseDrainAbAttr, applyAbAttrs } from "./ability";
 import { TerrainType } from "./terrain";
 import { WeatherType } from "./weather";
 import { BattleStat } from "./battle-stat";
@@ -260,9 +260,12 @@ export class ConfusedTag extends BattlerTag {
       if (pokemon.randSeedInt(3) === 0) {
         const atk = pokemon.getBattleStat(Stat.ATK);
         const def = pokemon.getBattleStat(Stat.DEF);
-        const damage = Math.ceil(((((2 * pokemon.level / 5 + 2) * 40 * atk / def) / 50) + 2) * (pokemon.randSeedInt(15, 85) / 100));
+        const damage = new Utils.NumberHolder(Math.ceil(((((2 * pokemon.level / 5 + 2) * 40 * atk / def) / 50) + 2) * (pokemon.randSeedInt(15, 85) / 100)));
         pokemon.scene.queueMessage(i18next.t("battle:battlerTagsConfusedLapseHurtItself"));
-        pokemon.damageAndUpdate(damage);
+
+        applyAbAttrs(DisguiseConfusionInteractionAbAttr, pokemon, null, damage);
+
+        pokemon.damageAndUpdate(damage.value);
         pokemon.battleData.hitCount++;
         (pokemon.scene.getCurrentPhase() as MovePhase).cancel();
       }

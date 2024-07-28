@@ -330,20 +330,53 @@ export class ReceivedTypeDamageMultiplierAbAttr extends ReceivedMoveDamageMultip
   }
 }
 
-export class PreDefendMoveDamageToOneAbAttr extends ReceivedMoveDamageMultiplierAbAttr {
+export class PreDefendDisguiseDamageAbAttr extends PreDefendAbAttr {
+
+  protected condition: PokemonDefendCondition;
+
   constructor(condition: PokemonDefendCondition) {
-    super(condition, 1);
+    super(true);
+
+    this.condition = condition;
   }
 
   applyPreDefend(pokemon: Pokemon, passive: boolean, attacker: Pokemon, move: Move, cancelled: Utils.BooleanHolder, args: any[]): boolean {
     if (this.condition(pokemon, attacker, move)) {
       (args[0] as Utils.NumberHolder).value = Math.floor(pokemon.getMaxHp() / 8);
+      pokemon.scene.queueMessage(i18next.t("abilityTriggers:preDefendDisguise", { pokemonNameWithAffix: getPokemonNameWithAffix(pokemon) }));
       return true;
     }
 
     return false;
   }
 }
+
+export class DisguiseConfusionInteractionAbAttr extends AbAttr {
+  /**
+* Makes confusion damage to disguise damage and triggers the ability.
+* @param {Pokemon} pokemon Pokemon has the ability
+* @param {Pokemon} passive N/A
+* @param {Utils.BooleanHolder} cancelled N/A.
+* @param {any[]} args [0] {@linkcode Utils.NumberHolder} confusion damage
+* @returns {boolean} true if the function succeeds
+*/
+  apply(pokemon: Pokemon, passive: boolean, cancelled: Utils.BooleanHolder, args: any[]) {
+
+    if (pokemon.formIndex === 1) {
+      return false;
+    }
+
+    (args[0] as Utils.NumberHolder).value = Math.floor(pokemon.getMaxHp() / 8);
+    pokemon.scene.queueMessage(i18next.t("abilityTriggers:preDefendDisguise", { pokemonNameWithAffix: getPokemonNameWithAffix(pokemon) }));
+    pokemon.scene.triggerPokemonFormChange(pokemon, SpeciesFormChangeManualTrigger, false);
+    return true;
+  }
+
+  getTriggerMessage(pokemon: Pokemon, abilityName: string, ...args: any[]): string {
+    return i18next.t("abilityTriggers:postDefendDisguise", { pokemonNameWithAffix: getPokemonNameWithAffix(pokemon) });
+  }
+}
+
 
 /**
  * Determines whether a Pokemon is immune to a move because of an ability.
@@ -496,17 +529,11 @@ export class PostDefendAbAttr extends AbAttr {
   }
 }
 
-export class PostDefendDisguiseAbAttr extends PostDefendAbAttr {
+export class PostDefendDisguiseMessageAbAttr extends PostDefendAbAttr {
 
   applyPostDefend(pokemon: Pokemon, passive: boolean, attacker: Pokemon, move: Move, hitResult: HitResult, args: any[]): boolean {
-    if (pokemon.formIndex === 0 && pokemon.battleData.hitCount !== 0 && (move.category === MoveCategory.SPECIAL || move.category === MoveCategory.PHYSICAL)) {
 
-      const recoilDamage = Math.ceil((pokemon.getMaxHp() / 8) - attacker.turnData.damageDealt);
-      if (!recoilDamage) {
-        return false;
-      }
-      pokemon.damageAndUpdate(recoilDamage, HitResult.OTHER);
-      pokemon.turnData.damageTaken += recoilDamage;
+    if (pokemon.formIndex === 0 && pokemon.battleData?.abilitiesApplied.includes(Abilities.DISGUISE)) {
       pokemon.scene.queueMessage(i18next.t("abilityTriggers:postDefendDisguise", { pokemonNameWithAffix: getPokemonNameWithAffix(pokemon) }));
       return true;
     }
@@ -4832,12 +4859,13 @@ export function initAbilities() {
       .attr(NoFusionAbilityAbAttr)
       .bypassFaint(),
     new Ability(Abilities.DISGUISE, 7)
-      .attr(PreDefendMoveDamageToOneAbAttr, (target, user, move) => target.formIndex === 0 && target.getAttackTypeEffectiveness(move.type, user) > 0)
-      .attr(PostSummonFormChangeAbAttr, p => p.battleData.hitCount === 0 ? 0 : 1)
-      .attr(PostBattleInitFormChangeAbAttr, () => 0)
-      .attr(PostDefendFormChangeAbAttr, p => p.battleData.hitCount === 0 ? 0 : 1)
-      .attr(PreDefendFormChangeAbAttr, p => p.battleData.hitCount === 0 ? 0 : 1)
-      .attr(PostDefendDisguiseAbAttr)
+      .attr(PreDefendDisguiseDamageAbAttr, (target, user, move) => target.formIndex === 0 && target.getAttackTypeEffectiveness(move.type, user) > 0 && (move.category === MoveCategory.SPECIAL || move.category === MoveCategory.PHYSICAL))
+      .attr(DisguiseConfusionInteractionAbAttr)
+      .attr(PreDefendFormChangeAbAttr, p => !p.battleData?.abilitiesApplied.includes(Abilities.DISGUISE) ? 0 : 1)
+      .attr(PostSummonFormChangeAbAttr, p => !p.battleData?.abilitiesApplied.includes(Abilities.DISGUISE) ? 0 : 1)
+      .attr(PostBattleInitFormChangeAbAttr, p => !p.battleData?.abilitiesApplied.includes(Abilities.DISGUISE) ? 0 : 1)
+      .attr(PostDefendFormChangeAbAttr, p => !p.battleData?.abilitiesApplied.includes(Abilities.DISGUISE) ? 0 : 1)
+      .attr(PostDefendDisguiseMessageAbAttr)
       .attr(UncopiableAbilityAbAttr)
       .attr(UnswappableAbilityAbAttr)
       .attr(UnsuppressableAbilityAbAttr)
